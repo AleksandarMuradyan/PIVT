@@ -39,6 +39,8 @@ spec:
     secret:
       # only use the first orderer
       secretName: hlf-orderer--{{ $ordererOrg.Name | lower }}-tlsca
+  - name: work
+    emptyDir: {}
 
 {{- range $i, $org := .Values.PeerOrgs }}
   - name: org-{{ $org.Name | lower }}-msp
@@ -140,7 +142,7 @@ spec:
 {{- range $i, $consortium := $consortiums }}
 {{- if or (not $.Values.flow.consortium.include) (has $consortium $.Values.flow.consortium.include) }}
     - - name: {{ $consortium }}
-        template: consortium--{{ $consortium }}
+        template: consortium--{{ $consortium | lower }}
 {{- end }} {{- /* if consortium included */ -}}
 {{- end }} {{- /* consortiums */ -}}
 {{- end }} {{- /* if consortium.enabled */ -}}{{""}}
@@ -166,12 +168,12 @@ spec:
 {{- if $.Values.flow.consortium.enabled }}
 {{- range $i, $consortium := $consortiums }}
 {{- if or (not $.Values.flow.consortium.include) (has $consortium $.Values.flow.consortium.include) }}
-  - name: consortium--{{ $consortium }}
+  - name: consortium--{{ $consortium | lower }}
     steps:
 {{- range $i, $org := (index $genesisProfile.Consortiums $consortium).Organizations }}
 {{- $orgName := $org.Name | trimSuffix "MSP" }}
     - - name: consortium-org--{{ $orgName }}
-        template: consortium-org--{{ $consortium }}--{{ $orgName }}
+        template: consortium-org--{{ $consortium | lower }}--{{ $orgName | lower }}
 {{- end }} {{- /* consortium.orgs */ -}}
 {{- end }} {{- /* if consortium included */ -}}
 {{- end }} {{- /* consortiums */ -}}
@@ -185,9 +187,15 @@ spec:
     steps:
     - - name: check-channel-exists
         template: check-channel-exists--{{ $channel.name }}
+    - - name: check-channel-exists-output
+        template: print-output
+        arguments:
+          artifacts:
+          - name: result
+            from: "{{ "{{" }}steps.check-channel-exists.outputs.artifacts.result{{ "}}" }}"
     - - name: channel-orgs
         template: channel-orgs--{{ $channel.name }}
-        when: "{{ "{{" }}steps.check-channel-exists.outputs.result{{ "}}" }}"
+        when: "{{ "{{" }}steps.check-channel-exists-output.outputs.result{{ "}}" }}"
 {{- end }} {{- /* if channel included */ -}}
 {{- end }} {{- /* channels */ -}}
 {{- end }} {{- /* if channel.enabled */ -}}{{""}}
@@ -198,13 +206,19 @@ spec:
 {{- if or (not $.Values.flow.consortium.include) (has $consortium $.Values.flow.consortium.include) }}
 {{- range $i, $org := (index $genesisProfile.Consortiums $consortium).Organizations }}
 {{- $orgName := $org.Name | trimSuffix "MSP" }}
-  - name: consortium-org--{{ $consortium }}--{{ $orgName }}
+  - name: consortium-org--{{ $consortium | lower  }}--{{ $orgName | lower }}
     steps:
     - - name: check-org-in-consortium
-        template: check-org-in-consortium--{{ $consortium }}--{{ $orgName }}
+        template: check-org-in-consortium--{{ $consortium | lower }}--{{ $orgName | lower }}
+    - - name: check-org-in-consortium-output
+        template: print-output
+        arguments:
+          artifacts:
+          - name: result
+            from: "{{ "{{" }}steps.check-org-in-consortium.outputs.artifacts.result{{ "}}" }}"
     - - name: add-org-to-consortium
-        template: add-org-to-consortium--{{ $consortium }}--{{ $orgName }}
-        when: "!{{ "{{" }}steps.check-org-in-consortium.outputs.result{{ "}}" }}"
+        template: add-org-to-consortium--{{ $consortium | lower }}--{{ $orgName | lower }}
+        when: "!{{ "{{" }}steps.check-org-in-consortium-output.outputs.result{{ "}}" }}"
 {{- end }} {{- /* consortium.orgs */ -}}
 {{- end }} {{- /* if consortium included */ -}}
 {{- end }} {{- /* consortiums */ -}}
@@ -218,7 +232,7 @@ spec:
     steps:
 {{- range $orgName := concat $channel.orgs (default list $channel.externalOrgs) }}
     - - name: {{ $orgName }}
-        template: channel-org--{{ $channel.name }}--{{ $orgName }}
+        template: channel-org--{{ $channel.name }}--{{ $orgName | lower }}
 {{- end }} {{- /* channel.orgs */ -}}
 {{- end }} {{- /* if channel included */ -}}
 {{- end }} {{- /* channels */ -}}
@@ -229,13 +243,19 @@ spec:
 {{- range $i, $channel := $.Values.network.channels }}
 {{- if or (not $.Values.flow.channel.include) (has $channel.name $.Values.flow.channel.include) }}
 {{- range $orgName := concat $channel.orgs (default list $channel.externalOrgs) }}
-  - name: channel-org--{{ $channel.name }}--{{ $orgName }}
+  - name: channel-org--{{ $channel.name }}--{{ $orgName | lower }}
     steps:
     - - name: check-org-in-channel
-        template: check-org-in-channel--{{ $channel.name }}--{{ $orgName }}
+        template: check-org-in-channel--{{ $channel.name }}--{{ $orgName | lower }}
+    - - name: check-org-in-channel-output
+        template: print-output
+        arguments:
+          artifacts:
+          - name: result
+            from: "{{ "{{" }}steps.check-org-in-channel.outputs.artifacts.result{{ "}}" }}"
     - - name: add-org-to-channel
         template: add-org-to-channel--{{ $channel.name }}--{{ $orgName }}
-        when: "!{{ "{{" }}steps.check-org-in-channel.outputs.result{{ "}}" }}"
+        when: "!{{ "{{" }}steps.check-org-in-channel-output.outputs.result{{ "}}" }}"
 {{- end }} {{- /* channel.orgs */ -}}
 {{- end }} {{- /* if channel included */ -}}
 {{- end }} {{- /* channels */ -}}
@@ -247,18 +267,18 @@ spec:
 {{- if or (not $.Values.flow.consortium.include) (has $consortium $.Values.flow.consortium.include) }}
 {{- range $i, $org := (index $genesisProfile.Consortiums $consortium).Organizations }}
 {{- $orgName := $org.Name | trimSuffix "MSP" }}
-  - name: add-org-to-consortium--{{ $consortium }}--{{ $orgName }}
+  - name: add-org-to-consortium--{{ $consortium | lower }}--{{ $orgName | lower }}
     steps:
     - - name: create-system-channel-config-update
-        template: create-system-channel-config-update--{{ $consortium }}--{{ $orgName }}
+        template: create-system-channel-config-update--{{ $consortium | lower }}--{{ $orgName | lower }}
     - - name: sign-system-channel-config-update
-        template: sign-system-channel-config-update--{{ $consortium }}--{{ $orgName }}
+        template: sign-system-channel-config-update--{{ $consortium | lower }}--{{ $orgName | lower }}
         arguments:
           artifacts:
           - name: config_update_tx
             from: "{{ "{{" }}steps.create-system-channel-config-update.outputs.artifacts.config_update_tx{{ "}}" }}"
     - - name: send-system-channel-config-update
-        template: send-system-channel-config-update--{{ $consortium }}--{{ $orgName }}
+        template: send-system-channel-config-update--{{ $consortium | lower }}--{{ $orgName | lower }}
         arguments:
           artifacts:
           - name: signed_config_update_tx
@@ -276,9 +296,9 @@ spec:
   - name: add-org-to-channel--{{ $channel.name }}--{{ $orgName }}
     steps:
     - - name: create-channel-config-update
-        template: create-channel-config-update--{{ $channel.name }}--{{ $orgName }}
+        template: create-channel-config-update--{{ $channel.name }}--{{ $orgName | lower }}
     - - name: sign-channel-config-update
-        template: sign-channel-config-update--{{ $channel.name }}--{{ $orgName }}
+        template: sign-channel-config-update--{{ $channel.name }}--{{ $orgName | lower }}
         arguments:
           artifacts:
           - name: config_update_tx
@@ -300,15 +320,15 @@ spec:
 {{- if or (not $.Values.flow.consortium.include) (has $consortium $.Values.flow.consortium.include) }}
 {{- range $i, $org := (index $genesisProfile.Consortiums $consortium).Organizations }}
 {{- $orgName := $org.Name | trimSuffix "MSP" }}
-  - name: sign-system-channel-config-update--{{ $consortium }}--{{ $orgName }}
+  - name: sign-system-channel-config-update--{{ $consortium | lower }}--{{ $orgName | lower }}
     inputs:
       artifacts:
       - name: config_update_tx
     steps: 
 {{- $_ := set $vars "firstSignature" true }}
 {{- range $i, $ordererOrg := $.Values.OrdererOrgs }}
-    - - name: sign-system-channel-config-update--{{ $ordererOrg.Name }}
-        template: sign-system-channel-config-update--{{ $ordererOrg.Name }}
+    - - name: sign-system-channel-config-update--{{ $ordererOrg.Name | lower }}
+        template: sign-system-channel-config-update--{{ $ordererOrg.Name | lower }}
         arguments:
           artifacts:
           - name: config_update_tx
@@ -318,7 +338,7 @@ spec:
             from: "{{ "{{" }}steps.sign-system-channel-config-update--{{ $vars.previousOrgName }}.outputs.artifacts.signed_config_update_tx{{ "}}" }}"
           {{- end }}
 {{- $_ := set $vars "firstSignature" false }}          
-{{- $_ := set $vars "previousOrgName" $ordererOrg.Name }}
+{{- $_ := set $vars "previousOrgName" ($ordererOrg.Name | lower) }}
 {{- end }} {{- /* OrdererOrgs  */ -}}{{""}}
     outputs:
       artifacts:
@@ -334,15 +354,15 @@ spec:
 {{- range $i, $channel := $.Values.network.channels }}
 {{- if or (not $.Values.flow.channel.include) (has $channel.name $.Values.flow.channel.include) }}
 {{- range $orgName := concat $channel.orgs (default list $channel.externalOrgs) }}
-  - name: sign-channel-config-update--{{ $channel.name }}--{{ $orgName }}
+  - name: sign-channel-config-update--{{ $channel.name }}--{{ $orgName | lower }}
     inputs:
       artifacts:
       - name: config_update_tx
     steps: 
 {{- $_ := set $vars "firstSignature" true }}
 {{- range $signerOrgName := $channel.orgs }}
-    - - name: maybe-sign-channel-config-update--{{ $signerOrgName }}
-        template: maybe-sign-channel-config-update--{{ $channel.name }}--{{ $signerOrgName }}
+    - - name: maybe-sign-channel-config-update--{{ $signerOrgName | lower }}
+        template: maybe-sign-channel-config-update--{{ $channel.name }}--{{ $signerOrgName | lower }}
         arguments:
           artifacts:
           - name: config_update_tx
@@ -352,7 +372,7 @@ spec:
             from: "{{ "{{" }}steps.maybe-sign-channel-config-update--{{ $vars.previousOrgName }}.outputs.artifacts.signed_config_update_tx{{ "}}" }}"
           {{- end }}
 {{- $_ := set $vars "firstSignature" false }}          
-{{- $_ := set $vars "previousOrgName" $signerOrgName }}
+{{- $_ := set $vars "previousOrgName" ($signerOrgName | lower) }}
 {{- end }} {{- /* channel.orgs */ -}}{{""}}
     outputs:
       artifacts:
@@ -363,6 +383,19 @@ spec:
 {{- end }} {{- /* if channel included */ -}}
 {{- end }} {{- /* channels */ -}}
 {{- end }} {{- /* if channel.enabled */ -}}{{""}}
+
+# helper template to print given artifact
+# see https://github.com/argoproj/argo-workflows/issues/5408
+  - name: print-output
+    inputs:
+      artifacts:
+      - name: result
+        path: /work/result
+    script:
+      image: alpine:3.6
+      command: [sh]
+      source: |
+        cat /work/result
 
 
 # leaf check-org-in-consortium templates
@@ -375,42 +408,45 @@ spec:
 {{- $ordererOrg := index $.Values.OrdererOrgs 0}}
 {{- $ordererHost := (index $ordererOrg.Specs 0).Hostname }}
 
-  - name: check-org-in-consortium--{{ $consortium }}--{{ $orgName }}
+  - name: check-org-in-consortium--{{ $consortium | lower }}--{{ $orgName | lower }}
     # consortium: {{ $consortium }}
     # org: {{ $orgName }}
     inputs:
+    outputs:
+      artifacts:
+      - name: result
+        path: /work/result
     retryStrategy:
       limit: {{ $.Values.retryCount }}
     script:
       image: hyperledger/fabric-tools:{{ $.Values.hyperledgerVersion }}
       command: [bash]
-      # we are echoing logs to stderr by >&2, since to stdout only true|false should be printed
       source: |
-          mkdir -p /work && 
-          
           peer channel fetch config /work/config_block.pb -c {{ $.Values.network.systemChannelID }} -o {{ $ordererAddress }}:7050 \
               {{- if $.Values.tlsEnabled }}
                   --tls --cafile /hlf_config/orderer-tlsca/tlscacert.pem \
               {{- end }}
-          && >&2 echo '-- fetched config block from orderer system channel {{ $.Values.network.systemChannelID }}' &&
+          && echo '-- fetched config block from orderer system channel {{ $.Values.network.systemChannelID }}' &&
           
           configtxlator proto_decode --input /work/config_block.pb --type common.Block \
                 | jq .data.data[0].payload.data.config > /work/config.json &&
-          echo >&2 '-- trimmed envelope from config block and converted to json' &&
+          echo '-- trimmed envelope from config block and converted to json' &&
 
           consortium=$(jq  '.channel_group.groups.Consortiums.groups."{{ $consortium }}"' /work/config.json) &&
           if test "$consortium" == "null"; then
-            echo >&2 '-- failed to parse consortium {{ $consortium }} from config block, does it exist?'
+            echo '-- failed to parse consortium {{ $consortium }} from config block, does it exist?'
             exit 1
           fi
 
           org=$(echo $consortium | jq '.groups.{{ $orgName }}MSP') &&
           if test "$org" == "null"; then
-            echo >&2 '-- peer organization {{ $orgName }} does not exist in the consortium {{ $consortium }}'
+            echo '-- peer organization {{ $orgName }} does not exist in the consortium {{ $consortium }}'
             echo false
+            echo false > /work/result
           else
-            echo >&2 '-- peer organization {{ $orgName }} exists in the consortium {{ $consortium }}'
+            echo '-- peer organization {{ $orgName }} exists in the consortium {{ $consortium }}'
             echo true
+            echo true > /work/result
           fi
 
       volumeMounts:
@@ -422,6 +458,8 @@ spec:
           name: orderer-{{ $ordererOrg.Name | lower }}-admin-msp
         - mountPath: /hlf-scripts
           name: hlf-scripts
+        - name: work
+          mountPath: /work
       
       env:
         - name: FABRIC_LOGGING_SPEC
@@ -453,7 +491,7 @@ spec:
 {{- range $i, $peerOrg := concat $.Values.PeerOrgs (default list $.Values.ExternalPeerOrgs) }}
 {{- if eq $orgName $peerOrg.Name }}
 
-  - name: create-system-channel-config-update--{{ $consortium }}--{{ $orgName }}
+  - name: create-system-channel-config-update--{{ $consortium | lower }}--{{ $orgName | lower }}
     # consortium: {{ $consortium }}
     # org: {{ $orgName }}
     outputs:
@@ -466,8 +504,6 @@ spec:
       image: hyperledger/fabric-tools:{{ $.Values.hyperledgerVersion }}
       command: [bash]
       source: |
-          mkdir -p /work && 
-            
           configtxgen -printOrg {{ $orgName }}MSP -configPath=/hlf_config/ > /work/new_org.json && 
           echo '-- printed new org {{ $orgName }}MSP to new_org.json' && 
             
@@ -498,6 +534,8 @@ spec:
           name: hlf-configtx
         - mountPath: /hlf-scripts
           name: hlf-scripts
+        - name: work
+          mountPath: /work
       
       env:
         - name: FABRIC_LOGGING_SPEC
@@ -523,7 +561,7 @@ spec:
 {{- if $.Values.flow.consortium.enabled }}
 {{- range $i, $ordererOrg := $.Values.OrdererOrgs}}
 
-  - name: sign-system-channel-config-update--{{ $ordererOrg.Name }}
+  - name: sign-system-channel-config-update--{{ $ordererOrg.Name | lower }}
     inputs:
       artifacts:
       - name: config_update_tx
@@ -542,6 +580,8 @@ spec:
       volumeMounts:
         - mountPath: /etc/hyperledger/fabric/msp/
           name: orderer-{{ $ordererOrg.Name | lower }}-admin-msp
+        - name: work
+          mountPath: /work
       env:
         - name: CORE_PEER_LOCALMSPID
           value: {{ $ordererOrg.Name }}MSP
@@ -562,7 +602,7 @@ spec:
 {{- range $i, $peerOrg := concat $.Values.PeerOrgs (default list $.Values.ExternalPeerOrgs) }}
 {{- if eq $orgName $peerOrg.Name }}
 
-  - name: send-system-channel-config-update--{{ $consortium }}--{{ $orgName }}
+  - name: send-system-channel-config-update--{{ $consortium | lower }}--{{ $orgName | lower }}
     inputs:
       artifacts:
       - name: signed_config_update_tx
@@ -630,33 +670,37 @@ spec:
   - name: check-channel-exists--{{ $channel.name }}
     # channel: {{ $channel }}
     inputs:
+    outputs:
+      artifacts:
+      - name: result
+        path: /work/result
     retryStrategy:
       limit: {{ $.Values.retryCount }}
     script:
       # image: hyperledger/fabric-tools:{{ $.Values.hyperledgerVersion }}
       image: raft/hl-fabric-tools:1.4.3
       command: [bash]
-      # we are echoing logs to stderr by >&2, since to stdout only true|false should be printed
       source: |
-          if >&2 peer channel checkexists --channelID {{ $channel.name }} -o {{ $ordererAddress }}:7050 \
+          if peer channel checkexists --channelID {{ $channel.name }} -o {{ $ordererAddress }}:7050 \
               {{- if $.Values.tlsEnabled }}
                   --tls --cafile /hlf_config/orderer-tlsca/tlscacert.pem \
               {{- end }}
           ; then 
-            >&2 echo '-- channel {{ $channel.name }} exists' 
+            echo '-- channel {{ $channel.name }} exists' 
             echo true
+            echo true > /work/result
             exit 0
           else
             result=$?
-            >&2 echo "-- result is: $result"
+            echo "-- result is: $result"
             if test $result -ne 99; then
-              >&2 echo "-- result is not 99, exiting with $result"
+              echo "-- result is not 99, exiting with $result"
               exit $result
             fi
           fi
 
           echo false
-
+          echo false > /work/result
 
       volumeMounts:
         - mountPath: /hlf_config/orderer-tlsca
@@ -667,6 +711,8 @@ spec:
           name: orderer-{{ $ordererOrg.Name | lower }}-admin-msp
         - mountPath: /hlf-scripts
           name: hlf-scripts
+        - name: work
+          mountPath: /work
       
       env:
         - name: FABRIC_LOGGING_SPEC
@@ -694,34 +740,37 @@ spec:
 {{- $ordererOrg := index $.Values.OrdererOrgs 0}}
 {{- $ordererHost := (index $ordererOrg.Specs 0).Hostname }}
 
-  - name: check-org-in-channel--{{ $channel.name }}--{{ $orgName }}
+  - name: check-org-in-channel--{{ $channel.name }}--{{ $orgName | lower }}
     # channel: {{ $channel }}
     # org: {{ $orgName }}
     inputs:
+    outputs:
+      artifacts:
+      - name: result
+        path: /work/result
     retryStrategy:
       limit: {{ $.Values.retryCount }}
     script:
       image: hyperledger/fabric-tools:{{ $.Values.hyperledgerVersion }}
       command: [bash]
-      # we are echoing logs to stderr by >&2, since to stdout only true|false should be printed
       source: |
-          mkdir -p /work && 
-          
           peer channel fetch config /work/config_block.pb -c {{ $channel.name }} -o {{ $ordererAddress }}:7050 \
               {{- if $.Values.tlsEnabled }}
                   --tls --cafile /hlf_config/orderer-tlsca/tlscacert.pem \
               {{- end }}
-          && >&2 echo '-- fetched config block for channel {{ $channel.name }}' &&
+          && echo '-- fetched config block for channel {{ $channel.name }}' &&
           
           configtxlator proto_decode --input /work/config_block.pb --type common.Block \
                 | jq .data.data[0].payload.data.config > /work/config.json &&
-          echo >&2 '-- trimmed envelope from config block and converted to json' &&
+          echo '-- trimmed envelope from config block and converted to json' &&
 
           application=$(jq  '.channel_group.groups.Application.groups."{{ $orgName }}MSP"' /work/config.json) &&
           if test "$application" == "null"; then
             echo false
+            echo false > /work/result
           else 
             echo true
+            echo true > /work/result
           fi          
 
       volumeMounts:
@@ -731,6 +780,8 @@ spec:
           name: orderer-{{ $ordererOrg.Name | lower }}-{{ $ordererHost | lower }}-tls
         - mountPath: /etc/hyperledger/fabric/msp/
           name: orderer-{{ $ordererOrg.Name | lower }}-admin-msp
+        - name: work
+          mountPath: /work
       
       env:
         - name: FABRIC_LOGGING_SPEC
@@ -762,7 +813,7 @@ spec:
 {{- $ordererOrg := index $.Values.OrdererOrgs 0}}
 {{- $ordererHost := (index $ordererOrg.Specs 0).Hostname }}
 
-  - name: create-channel-config-update--{{ $channel.name }}--{{ $orgName }}
+  - name: create-channel-config-update--{{ $channel.name }}--{{ $orgName | lower }}
     outputs:
       artifacts:
       - name: config_update_tx
@@ -774,8 +825,6 @@ spec:
       image: hyperledger/fabric-tools:{{ $.Values.hyperledgerVersion }}
       command: [bash]
       source: |
-        mkdir -p /work &&
-                             
         configtxgen -printOrg {{ $orgName }}MSP -configPath=/hlf_config/ > /work/new_org.json &&
         echo '-- printed new new_org.json' &&
 
@@ -806,7 +855,9 @@ spec:
           name: hlf-configtx
         - mountPath: /hlf-scripts
           name: hlf-scripts
-      
+        - name: work
+          mountPath: /work
+
       env:
         - name: FABRIC_LOGGING_SPEC
           value: {{ $.Values.logLevel }}
@@ -836,7 +887,7 @@ spec:
 {{- $ordererOrg := index $.Values.OrdererOrgs 0}}
 {{- $ordererHost := (index $ordererOrg.Specs 0).Hostname }}
 
-  - name: maybe-sign-channel-config-update--{{ $channel.name }}--{{ $orgName }}
+  - name: maybe-sign-channel-config-update--{{ $channel.name }}--{{ $orgName | lower }}
     inputs:
       artifacts:
       - name: config_update_tx
@@ -851,8 +902,6 @@ spec:
       image: hyperledger/fabric-tools:{{ $.Values.hyperledgerVersion }}
       command: [bash]
       source: |
-          mkdir -p /work && 
-          
           peer channel fetch config /work/config_block.pb -c {{ $channel.name }} -o {{ $ordererAddress }}:7050 \
               {{- if $.Values.tlsEnabled }}
                   --tls --cafile /hlf_config/orderer-tlsca/tlscacert.pem \
@@ -885,6 +934,8 @@ spec:
           name: orderer-{{ $ordererOrg.Name | lower }}-admin-msp
         - mountPath: /etc/hyperledger/fabric/org-admin-msp/
           name: peer-{{ $orgName | lower }}-admin-msp
+        - name: work
+          mountPath: /work
 
       env:
         - name: FABRIC_LOGGING_SPEC
